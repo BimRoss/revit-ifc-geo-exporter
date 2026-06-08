@@ -11,14 +11,22 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <UseWindowsForms>true</UseWindowsForms>
     <Version>0.2.0</Version>
     <Company>BimRoss</Company>
     <!-- Override -p:RevitVersion=2023|2024|2025 to retarget. -->
     <RevitVersion Condition="'$(RevitVersion)' == ''">2024</RevitVersion>
     <RevitInstallDir Condition="'$(RevitInstallDir)' == ''">C:\Program Files\Autodesk\Revit $(RevitVersion)</RevitInstallDir>
+    <!--
+      UseLocalRevitApi: true when RevitAPI.dll sits at $(RevitInstallDir), false otherwise.
+      When false (CI, no local Revit install), we fall back to the Nice3point reference
+      assemblies on NuGet so headless builds succeed.
+    -->
+    <UseLocalRevitApi Condition="Exists('$(RevitInstallDir)\RevitAPI.dll')">true</UseLocalRevitApi>
+    <UseLocalRevitApi Condition="'$(UseLocalRevitApi)' == ''">false</UseLocalRevitApi>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(UseLocalRevitApi)' == 'true'">
     <Reference Include="RevitAPI">
       <HintPath>$(RevitInstallDir)\RevitAPI.dll</HintPath>
       <Private>false</Private>
@@ -27,6 +35,27 @@
       <HintPath>$(RevitInstallDir)\RevitAPIUI.dll</HintPath>
       <Private>false</Private>
     </Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseLocalRevitApi)' == 'false'">
+    <!--
+      Community-maintained Revit reference assemblies (compile-only stubs).
+      Package versions track Revit majors: RevitVersion=2024 → 2024.*.*.
+      See https://github.com/Nice3point/RevitApi.
+    -->
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="$(RevitVersion).*">
+      <PrivateAssets>all</PrivateAssets>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitVersion).*">
+      <PrivateAssets>all</PrivateAssets>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
   </ItemGroup>
 
   <ItemGroup>

@@ -25,19 +25,27 @@ namespace BimRoss.RevitIfcGeoExporter
                 return Result.Cancelled;
             }
 
-            // TODO(#11 follow-up): replace defaults with a WinForms/WPF options
-            // dialog and persist to %APPDATA%\BimRoss\RevitIfcGeoExporter\options.json.
-            var opts = new ExportOptions();
+            var opts = ExportOptionsStore.Load();
+            using (var dlg = new ExportOptionsDialog(opts))
+            {
+                if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return Result.Cancelled;
+                opts = dlg.Result;
+            }
+            ExportOptionsStore.Save(opts);
 
-            var dlg = new Microsoft.Win32.SaveFileDialog
+            string outPath;
+            using (var sfd = new System.Windows.Forms.SaveFileDialog
             {
                 Title = "Save IFC",
                 Filter = "IFC files (*.ifc)|*.ifc",
                 FileName = SafeName(host.Title) + "_selection.ifc",
-                DefaultExt = ".ifc",
-            };
-            if (dlg.ShowDialog() != true) return Result.Cancelled;
-            var outPath = dlg.FileName;
+                DefaultExt = "ifc",
+                AddExtension = true,
+            })
+            {
+                if (sfd.ShowDialog() != System.Windows.Forms.DialogResult.OK) return Result.Cancelled;
+                outPath = sfd.FileName;
+            }
 
             try
             {
@@ -46,8 +54,12 @@ namespace BimRoss.RevitIfcGeoExporter
                 {
                     IfcWriter.Write(sw, ctx, Path.GetFileName(outPath));
                 }
-                TaskDialog.Show("Export Selection to IFC",
-                    $"Wrote {ctx.Elements.Count} element(s) across {ctx.Storeys.Count} storey/storeys to:\n{outPath}");
+                var sizeMb = new FileInfo(outPath).Length / (1024.0 * 1024.0);
+                var sizeLine = sizeMb >= 1.0 ? $"  ({sizeMb:0.0} MB)" : $"  ({sizeMb * 1024.0:0} KB)";
+                var msg = $"Wrote {ctx.Elements.Count} element(s) across {ctx.Storeys.Count} storey/storeys to:\n{outPath}{sizeLine}";
+                if (sizeMb > opts.LargeFileWarningMb)
+                    msg += $"\n\nNote: output exceeds your {opts.LargeFileWarningMb} MB warning threshold.";
+                TaskDialog.Show("Export Selection to IFC", msg);
                 return Result.Succeeded;
             }
             catch (Exception ex)

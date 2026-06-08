@@ -16,7 +16,7 @@ Built for fast handoff to downstream viewers / web pipelines / clash workflows w
 - Tessellated geometry as `IfcTriangulatedFaceSet` over `IfcCartesianPointList3D`.
 - Stable 22-char IFC GUIDs from Revit `UniqueId`, now canonically encoded (#8 — full 16 bytes, round-trippable with IfcOpenShell).
 - Vertex dedup via injective tuple key — no more hash collisions on distinct positions (#9).
-- Configurable `ViewDetailLevel` + face triangulation tolerance through `ExportOptions` (#11). UI dialog persistence is a follow-up; defaults reproduce v0.1.0 behavior.
+- Configurable `ViewDetailLevel` + face triangulation tolerance + per-feature toggles via a WinForms options dialog (#11). Choices persist to `%APPDATA%\BimRoss\RevitIfcGeoExporter\options.json` between runs.
 
 ## Build
 
@@ -52,7 +52,7 @@ dotnet test
 - **validate-fixtures** — Linux, Python 3.12, validates every `.ifc` under `tests/fixtures/` with `ifcopenshell.validate`.
 - **build-addin** — Windows, matrix over Revit 2023/2024/2025, builds the add-in and uploads a per-version artifact.
 
-Note: the `build-addin` job currently expects a Revit reference-assembly NuGet (e.g. `Nice3point.Revit.Api.RevitAPI`) to be wired into the csproj for the cloud builds to work — see #10 for the package-reference cutover. Until that lands, only the local build path works.
+The csproj auto-detects whether `RevitAPI.dll` is present at `$(RevitInstallDir)`; if not (CI, no local Revit install), it falls back to the `Nice3point.Revit.Api.RevitAPI` / `…RevitAPIUI` reference-assembly NuGets. Local-Revit dev workflow is unchanged.
 
 ## Install
 
@@ -80,6 +80,8 @@ src/
     ├── RevitIfcGeoExporter.addin       # Revit add-in manifest
     ├── ExportSelectionCommand.cs       # IExternalCommand entry point + orchestrator
     ├── ExportOptions.cs                # User-tunable knobs
+    ├── ExportOptionsDialog.cs          # WinForms modal options dialog
+    ├── ExportOptionsStore.cs           # Load/save options to %APPDATA% JSON
     ├── ExportTypes.cs                  # Pure DTOs consumed by IfcWriter
     ├── CategoryMap.cs                  # Revit Category → IFC entity + PredefinedType
     ├── GeometryWalker.cs               # Solid/Mesh walk → triangulation → meters

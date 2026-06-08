@@ -3,45 +3,77 @@ using Autodesk.Revit.DB;
 
 namespace BimRoss.RevitIfcGeoExporter
 {
-    /// <summary>
-    /// Triangulated mesh in IFC units (meters). Vertices are de-duplicated.
-    /// </summary>
+    /// <summary>Triangulated mesh in IFC units (meters), with deduplicated vertices.</summary>
     internal class TriMesh
     {
-        public List<double[]> Vertices = new List<double[]>();   // [x,y,z] in meters
-        public List<int[]> Triangles = new List<int[]>();        // 0-based indices into Vertices
-        private readonly Dictionary<long, int> _index = new Dictionary<long, int>();
+        public readonly List<double[]> Vertices = new List<double[]>();  // [x,y,z] meters
+        public readonly List<int[]> Triangles = new List<int[]>();       // 0-based indices
+
+        // Tuple-keyed dict is injective over the quantized grid (no hash collisions).
+        private readonly Dictionary<(long, long, long), int> _index = new Dictionary<(long, long, long), int>();
+
+        /// <summary>0.1 mm quantization for vertex-equality test.</summary>
+        public const double VertexEpsilonMeters = 0.0001;
+        private const double Inv = 1.0 / VertexEpsilonMeters;
 
         public int AddVertex(double x, double y, double z)
         {
-            // Quantize to 0.1mm to dedupe near-duplicate vertices across faces.
-            long kx = (long)System.Math.Round(x * 10000.0);
-            long ky = (long)System.Math.Round(y * 10000.0);
-            long kz = (long)System.Math.Round(z * 10000.0);
-            long key = (kx * 73856093L) ^ (ky * 19349663L) ^ (kz * 83492791L);
+            var key = (
+                (long)System.Math.Round(x * Inv),
+                (long)System.Math.Round(y * Inv),
+                (long)System.Math.Round(z * Inv));
             if (_index.TryGetValue(key, out var existing)) return existing;
             var idx = Vertices.Count;
             Vertices.Add(new[] { x, y, z });
             _index[key] = idx;
             return idx;
         }
+
+        public int VertexCount => Vertices.Count;
+        public int TriangleCount => Triangles.Count;
     }
 
     internal class GeometryWalker
     {
         private readonly Document _doc;
-        private static readonly Options Opts = new Options
-        {
-            ComputeReferences = false,
-            IncludeNonVisibleObjects = false,
-            DetailLevel = ViewDetailLevel.Fine,
-        };
+        private readonly ExportOptions _opts;
+        private readonly Options _revitOpts;
 
-        public GeometryWalker(Document doc) { _doc = doc; }
-
-        public TriMesh Tessellate(Element el)
+        public GeometryWalker(Document doc, ExportOptions opts)
         {
-            var geom = el.get_Geometry(Opts);
+            _doc = doc;
+            _opts = opts;
+            _revitOpts = new Options
+            {
+                ComputeReferences = false,
+                IncludeNonVisibleObjects = false,
+                DetailLevel = opts.DetailLevel,
+            };
+        }
+
+        /// <summary>
+        /// Tessellate an element into a single mesh in IFC meters.
+        /// <paramref name="preTransform"/> is composed in before any walking — used
+        /// for linked-model elements (RevitLinkInstance.GetTotalTransform()).
+        /// </summary>
+        public TriMesh Tessellate(Element el, Transform preTransform = null)
+        {
+            var geom = el.get_Geometry(_revitOpts);
+            if (geom == null) return null;
+            var mesh = new TriMesh();
+            var xform = preTransform ?? Transform.Identity;
+            WalkElement(geom, xform, mesh);
+            return mesh;
+        }
+
+        /// <summary>
+        /// Tessellate a FamilySymbol in its own (symbol-local) coordinate frame.
+        /// Used by SymbolCache for IfcMappedItem instance reuse.
+        /// </summary>
+        public TriMesh TessellateSymbol(FamilySymbol symbol)
+        {
+            if (symbol == null) return null;
+            var geom = symbol.get_Geometry(_revitOpts);
             if (geom == null) return null;
             var mesh = new TriMesh();
             WalkElement(geom, Transform.Identity, mesh);
@@ -75,7 +107,16 @@ namespace BimRoss.RevitIfcGeoExporter
         {
             foreach (Face face in solid.Faces)
             {
-                var triMesh = face.Triangulate();
+                Mesh triMesh;
+                try
+                {
+                    // Triangulate(double) accepts a 0..1 level-of-detail.
+                    triMesh = face.Triangulate(_opts.TriangulationLevel);
+                }
+                catch
+                {
+                    triMesh = face.Triangulate();
+                }
                 if (triMesh == null) continue;
                 AddMesh(triMesh, xform, mesh);
             }
@@ -98,7 +139,7 @@ namespace BimRoss.RevitIfcGeoExporter
             }
         }
 
-        // Revit internal units are feet; IFC defaults to meters.
+        // Revit internal length unit is feet.
         private static double FeetToM(double feet) => feet * 0.3048;
     }
 }

@@ -11,7 +11,7 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Company>BimRoss</Company>
     <!-- Override -p:RevitVersion=2023|2024|2025 to retarget. -->
     <RevitVersion Condition="'$(RevitVersion)' == ''">2024</RevitVersion>

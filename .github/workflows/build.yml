@@ -1,0 +1,64 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    name: Unit tests (Linux, .NET 8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
+      - name: Restore
+        working-directory: tests/RevitIfcGeoExporter.Tests
+        run: dotnet restore
+      - name: Test
+        working-directory: tests/RevitIfcGeoExporter.Tests
+        run: dotnet test --logger "console;verbosity=normal"
+
+  validate-fixtures:
+    name: Validate IFC fixtures
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install ifcopenshell
+      - run: python tests/validate_fixtures.py
+
+  build-addin:
+    # Builds against the Nice3point Revit reference assemblies (Windows runner
+    # required because the add-in targets .NET Framework 4.8, which only builds
+    # on Windows runners under MSBuild).
+    name: Build (Revit ${{ matrix.revit_version }})
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        revit_version: [2023, 2024, 2025]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
+      - name: Restore
+        working-directory: src
+        run: dotnet restore RevitIfcGeoExporter.sln
+      - name: Build
+        working-directory: src
+        run: dotnet build RevitIfcGeoExporter.sln -c Release -p:RevitVersion=${{ matrix.revit_version }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: addin-revit-${{ matrix.revit_version }}
+          path: |
+            src/RevitIfcGeoExporter/bin/Release/RevitIfcGeoExporter.dll
+            src/RevitIfcGeoExporter/bin/Release/RevitIfcGeoExporter.addin

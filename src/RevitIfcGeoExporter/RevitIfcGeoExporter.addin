@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Command">
+    <Name>Export Selection to IFC (Geometry)</Name>
+    <Assembly>RevitIfcGeoExporter.dll</Assembly>
+    <AddInId>3E1F8B4C-7A21-4E2B-9C3D-1A5E2F6B7C81</AddInId>
+    <FullClassName>BimRoss.RevitIfcGeoExporter.ExportSelectionCommand</FullClassName>
+    <Text>Export Selection to IFC</Text>
+    <Description>Exports selected elements as tessellated IFC4 geometry (IfcTriangulatedFaceSet under IfcBuildingElementProxy), preserving UniqueId-as-IfcGUID and Category.</Description>
+    <VendorId>BIMROSS</VendorId>
+    <VendorDescription>BimRoss — bimross.com</VendorDescription>
+  </AddIn>
+</RevitAddIns>
